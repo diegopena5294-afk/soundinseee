@@ -27,7 +27,9 @@ let ultimoTiempoHistorial = 0;
 
 let ultimaNotificacion = 0;
 
-// DETECTAR IPHONE
+let escuchando = false;
+
+// IPHONE
 
 const esIPhone =
     /iPhone|iPad|iPod/i.test(
@@ -159,8 +161,13 @@ async function iniciarMicrofono() {
         );
 
         if (
-            !navigator.mediaDevices
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
         ) {
+
+            actualizarEstado(
+                "❌ Micrófono no compatible"
+            );
 
             alert(
                 "Micrófono no compatible"
@@ -171,38 +178,23 @@ async function iniciarMicrofono() {
 
         // FIX IPHONE
 
-        const constraints = {
-
-            audio: {
-
-                echoCancellation: false,
-
-                noiseSuppression: false,
-
-                autoGainControl: false
-            }
-        };
-
         const stream =
             await navigator.mediaDevices
-            .getUserMedia(
-                constraints
-            );
+            .getUserMedia({
+
+                audio: {
+
+                    echoCancellation: false,
+
+                    noiseSuppression: false,
+
+                    autoGainControl: false
+                }
+            });
 
         console.log(
             "Micro funcionando"
         );
-
-        // VALIDACION
-
-        if (!stream.active) {
-
-            alert(
-                "iPhone no activó el micrófono"
-            );
-
-            return;
-        }
 
         const audioContext =
             new(
@@ -210,7 +202,7 @@ async function iniciarMicrofono() {
                 window.webkitAudioContext
             )();
 
-        // FIX MOVILES
+        // FIX IOS
 
         if (
             audioContext.state ===
@@ -218,20 +210,6 @@ async function iniciarMicrofono() {
         ) {
 
             await audioContext.resume();
-        }
-
-        // VALIDACION AUDIO
-
-        if (
-            audioContext.state !==
-            "running"
-        ) {
-
-            alert(
-                "iPhone bloqueó el audio"
-            );
-
-            return;
         }
 
         const source =
@@ -244,10 +222,11 @@ async function iniciarMicrofono() {
             audioContext
             .createAnalyser();
 
-        // FIX IPHONE
-
         analyser.fftSize =
             esIPhone ? 128 : 256;
+
+        analyser.smoothingTimeConstant =
+            0.8;
 
         source.connect(analyser);
 
@@ -266,11 +245,6 @@ async function iniciarMicrofono() {
                 data.reduce(
                     (a, b) => a + b
                 ) / data.length;
-
-            console.log(
-                "Volumen:",
-                promedio
-            );
 
             // ALERTA
 
@@ -292,13 +266,12 @@ async function iniciarMicrofono() {
                     "🚨 ALERTA",
                     "Sonido fuerte detectado"
                 );
-
             }
 
             // VOZ
 
             else if (
-                promedio > 20
+                promedio > 18
             ) {
 
                 cambiarModo(
@@ -312,7 +285,6 @@ async function iniciarMicrofono() {
                 agregarHistorial(
                     "🗣️ Voz detectada"
                 );
-
             }
 
             // NORMAL
@@ -356,18 +328,16 @@ async function iniciarMicrofono() {
 
 let recognition = null;
 
-if (
+const SpeechRecognition =
     window.SpeechRecognition ||
-    window.webkitSpeechRecognition
-) {
+    window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
 
     recognition =
-        new(
-            window.SpeechRecognition ||
-            window.webkitSpeechRecognition
-        )();
+        new SpeechRecognition();
 
-    // CONFIG RAPIDA
+    // CONFIG
 
     recognition.lang = "es-ES";
 
@@ -377,14 +347,12 @@ if (
 
     recognition.maxAlternatives = 1;
 
-    // TEXTO COMPLETO Y RAPIDO
+    // TEXTO COMPLETO
 
     recognition.onresult =
         (event) => {
 
             let textoFinal = "";
-
-            let textoIntermedio = "";
 
             for (
                 let i = 0;
@@ -392,27 +360,13 @@ if (
                 i++
             ) {
 
-                const transcript =
+                textoFinal +=
                     event.results[i][0]
-                    .transcript;
-
-                if (
-                    event.results[i]
-                    .isFinal
-                ) {
-
-                    textoFinal +=
-                        transcript + " ";
-
-                } else {
-
-                    textoIntermedio +=
-                        transcript;
-                }
+                    .transcript + " ";
             }
 
             textoVoz.innerHTML =
-                `✏️ ${textoFinal}${textoIntermedio}`;
+                `✏️ ${textoFinal}`;
         };
 
     // ERROR
@@ -422,11 +376,22 @@ if (
 
             console.log(
                 "ERROR VOZ:",
-                e
+                e.error
             );
+
+            // FIX ANDROID
+
+            if (
+                e.error === "network"
+            ) {
+
+                actualizarEstado(
+                    "⚠️ Error de red en voz"
+                );
+            }
         };
 
-    // REINICIAR
+    // REINICIO AUTOMATICO
 
     recognition.onend =
         () => {
@@ -435,9 +400,10 @@ if (
                 "Reconocimiento terminado"
             );
 
-            // SOLO NO IPHONE
-
-            if (!esIPhone) {
+            if (
+                escuchando &&
+                !esIPhone
+            ) {
 
                 try {
 
@@ -460,41 +426,56 @@ if (
 
 btnStart.addEventListener(
     "click",
-    () => {
+    async () => {
+
+        btnStart.disabled = true;
 
         Notification
             .requestPermission();
 
-        btnStart.style.display =
-            "none";
-
         actualizarEstado(
-            "🎧 Sistema iniciado"
+            "🎧 Iniciando..."
         );
 
-        // SIN AWAIT FIX IPHONE
+        // FIX IOS
 
-        iniciarMicrofono();
+        try {
 
-        // NO ACTIVAR VOZ EN IPHONE
+            await iniciarMicrofono();
 
-        if (
-            recognition &&
-            !esIPhone
-        ) {
+            // SOLO ACTIVAR VOZ
+            // EN NO IPHONE
 
-            try {
+            if (
+                recognition &&
+                !esIPhone
+            ) {
+
+                escuchando = true;
 
                 recognition.start();
 
                 console.log(
                     "Reconocimiento iniciado"
                 );
-
-            } catch (e) {
-
-                console.log(e);
             }
+
+            btnStart.style.display =
+                "none";
+
+            actualizarEstado(
+                "🎧 Sistema iniciado"
+            );
+
+        } catch (e) {
+
+            console.log(e);
+
+            btnStart.disabled = false;
+
+            actualizarEstado(
+                "❌ Error al iniciar"
+            );
         }
     }
 );
