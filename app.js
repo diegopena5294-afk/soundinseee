@@ -312,7 +312,7 @@ if (
 ) {
 
     navigator.serviceWorker
-        .register("./sw.js")
+        .register("sw.js")
 
     .then(() => {
 
