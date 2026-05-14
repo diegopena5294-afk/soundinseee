@@ -35,7 +35,7 @@ const esIPhone =
     );
 
 console.log(
-    "¿Es iPhone?:",
+    "¿Es iPhone?",
     esIPhone
 );
 
@@ -169,15 +169,40 @@ async function iniciarMicrofono() {
             return;
         }
 
+        // FIX IPHONE
+
+        const constraints = {
+
+            audio: {
+
+                echoCancellation: false,
+
+                noiseSuppression: false,
+
+                autoGainControl: false
+            }
+        };
+
         const stream =
             await navigator.mediaDevices
-            .getUserMedia({
-                audio: true
-            });
+            .getUserMedia(
+                constraints
+            );
 
         console.log(
             "Micro funcionando"
         );
+
+        // VALIDACION
+
+        if (!stream.active) {
+
+            alert(
+                "iPhone no activó el micrófono"
+            );
+
+            return;
+        }
 
         const audioContext =
             new(
@@ -185,7 +210,7 @@ async function iniciarMicrofono() {
                 window.webkitAudioContext
             )();
 
-        // FIX IPHONE
+        // FIX MOVILES
 
         if (
             audioContext.state ===
@@ -195,7 +220,7 @@ async function iniciarMicrofono() {
             await audioContext.resume();
         }
 
-        // VALIDACION IPHONE
+        // VALIDACION AUDIO
 
         if (
             audioContext.state !==
@@ -342,43 +367,52 @@ if (
             window.webkitSpeechRecognition
         )();
 
-    // CONFIG
+    // CONFIG RAPIDA
 
     recognition.lang = "es-ES";
 
-    recognition.interimResults =
-        true;
+    recognition.interimResults = true;
 
-    recognition.continuous =
-        true;
+    recognition.continuous = true;
 
-    recognition.maxAlternatives =
-        1;
+    recognition.maxAlternatives = 1;
 
-    // TEXTO RAPIDO
+    // TEXTO COMPLETO Y RAPIDO
 
     recognition.onresult =
         (event) => {
 
-            let texto = "";
+            let textoFinal = "";
+
+            let textoIntermedio = "";
 
             for (
-                let i =
-                event.resultIndex;
-
-                i <
-                event.results.length;
-
+                let i = 0;
+                i < event.results.length;
                 i++
             ) {
 
-                texto +=
+                const transcript =
                     event.results[i][0]
                     .transcript;
+
+                if (
+                    event.results[i]
+                    .isFinal
+                ) {
+
+                    textoFinal +=
+                        transcript + " ";
+
+                } else {
+
+                    textoIntermedio +=
+                        transcript;
+                }
             }
 
             textoVoz.innerHTML =
-                `✏️ ${texto}`;
+                `✏️ ${textoFinal}${textoIntermedio}`;
         };
 
     // ERROR
@@ -401,11 +435,9 @@ if (
                 "Reconocimiento terminado"
             );
 
-            // REINICIAR SOLO EN ANDROID/WINDOWS
+            // SOLO NO IPHONE
 
-            if (
-                !esIPhone
-            ) {
+            if (!esIPhone) {
 
                 try {
 
@@ -440,12 +472,11 @@ btnStart.addEventListener(
             "🎧 Sistema iniciado"
         );
 
-        // SIN AWAIT PARA IPHONE
+        // SIN AWAIT FIX IPHONE
 
         iniciarMicrofono();
 
-        // ACTIVAR VOZ SOLO
-        // EN NO IPHONE
+        // NO ACTIVAR VOZ EN IPHONE
 
         if (
             recognition &&
