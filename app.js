@@ -1,4 +1,4 @@
-console.log(tf);
+console.log("App iniciada");
 
 // ELEMENTOS
 
@@ -65,7 +65,8 @@ function enviarNotificacion(
 
     const n =
         new Notification(
-            titulo, {
+            titulo,
+            {
                 body: texto
             }
         );
@@ -141,17 +142,43 @@ async function iniciarMicrofono() {
 
     try {
 
+        // PRUEBA TEMPORAL
+
+        console.log(
+            "Intentando acceder al micro..."
+        );
+
+        console.log(
+            navigator.mediaDevices
+        );
+
         const stream =
             await navigator.mediaDevices
             .getUserMedia({
                 audio: true
             });
 
+        alert(
+            "✅ Micrófono funcionando"
+        );
+
+        console.log(stream);
+
         const audioContext =
             new(
                 window.AudioContext ||
                 window.webkitAudioContext
             )();
+
+        // FIX MOVILES
+
+        if (
+            audioContext.state ===
+            "suspended"
+        ) {
+
+            await audioContext.resume();
+        }
 
         const source =
             audioContext
@@ -162,6 +189,8 @@ async function iniciarMicrofono() {
         const analyser =
             audioContext
             .createAnalyser();
+
+        analyser.fftSize = 256;
 
         source.connect(analyser);
 
@@ -176,16 +205,27 @@ async function iniciarMicrofono() {
                 data
             );
 
+            // DEBUG TEMPORAL
+
+            console.log(data);
+
             let promedio =
                 data.reduce(
                     (a, b) => a + b
                 ) / data.length;
 
+            console.log(
+                "Volumen:",
+                promedio
+            );
+
             // DETECCIONES
 
             if (promedio > 85) {
 
-                cambiarModo("alerta");
+                cambiarModo(
+                    "alerta"
+                );
 
                 actualizarEstado(
                     "🚨 Sonido fuerte"
@@ -201,10 +241,12 @@ async function iniciarMicrofono() {
                 );
 
             } else if (
-                promedio > 40
+                promedio > 20
             ) {
 
-                cambiarModo("voz");
+                cambiarModo(
+                    "voz"
+                );
 
                 actualizarEstado(
                     "🗣️ Voz detectada"
@@ -216,7 +258,9 @@ async function iniciarMicrofono() {
 
             } else {
 
-                cambiarModo("normal");
+                cambiarModo(
+                    "normal"
+                );
 
                 actualizarEstado(
                     "🎧 Escuchando..."
@@ -232,14 +276,17 @@ async function iniciarMicrofono() {
 
     } catch (error) {
 
-        console.log(error);
+        console.log(
+            "ERROR MICRO:",
+            error
+        );
 
         actualizarEstado(
             "❌ Micrófono bloqueado"
         );
 
         alert(
-            "Permite el acceso al micrófono"
+            "❌ Permite acceso al micrófono"
         );
     }
 }
@@ -259,27 +306,54 @@ if (
             window.webkitSpeechRecognition
         )();
 
+    // CONFIG RAPIDA
+
     recognition.lang = "es-MX";
 
-    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.continuous = false;
+
+    recognition.maxAlternatives = 1;
+
+    // TEXTO RAPIDO
 
     recognition.onresult =
         (event) => {
 
-            let texto = "";
+            const resultado =
+                event.results[
+                    event.results.length - 1
+                ];
 
-            for (
-                let i = event.resultIndex; i < event.results.length; i++
-            ) {
-
-                texto +=
-                    event.results[i][0]
-                    .transcript + " ";
-            }
+            const texto =
+                resultado[0].transcript;
 
             textoVoz.innerHTML =
                 `✏️ ${texto}`;
         };
+
+    recognition.onerror =
+        (e) => {
+
+            console.log(
+                "ERROR VOZ:",
+                e
+            );
+        };
+
+    recognition.onend =
+        () => {
+
+            console.log(
+                "Reconocimiento terminado"
+            );
+        };
+
+} else {
+
+    textoVoz.innerHTML =
+        "⚠️ Voz no compatible";
 }
 
 // BOTON
@@ -288,7 +362,8 @@ btnStart.addEventListener(
     "click",
     async() => {
 
-        Notification.requestPermission();
+        Notification
+            .requestPermission();
 
         btnStart.style.display =
             "none";
@@ -299,14 +374,28 @@ btnStart.addEventListener(
 
         await iniciarMicrofono();
 
+        // PRUEBA VOZ
+
         if (recognition) {
 
-            recognition.start();
+            try {
+
+                recognition.start();
+
+                console.log(
+                    "Reconocimiento iniciado"
+                );
+
+            } catch (e) {
+
+                console.log(e);
+            }
         }
     }
 );
 
 // SERVICE WORKER
+
 if (
     "serviceWorker" in navigator
 ) {
@@ -324,7 +413,10 @@ if (
 
     .catch((e) => {
 
-        console.log(e);
+        console.log(
+            "ERROR SW:",
+            e
+        );
 
     });
 }
